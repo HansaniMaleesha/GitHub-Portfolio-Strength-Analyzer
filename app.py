@@ -22,9 +22,63 @@ model, le, model_columns, feature_means, explainer = load_assets()
 TOKEN = st.secrets["GITHUB_TOKEN"]
 headers = {"Authorization": f"token {TOKEN}"}
 
-st.markdown("## 🚀 GitHub Portfolio Strength Analyzer")
+st.markdown("""
+<h1 style='text-align:center;'>🔍 CheckMyGit</h1>
+<p style='text-align:center;font-size:20px;'>
+AI-powered GitHub Strength Analyzer 🚀
+</p>
 
-github_url = st.text_input("Enter GitHub Profile URL")
+""", unsafe_allow_html=True)
+
+st.divider()
+
+c1, c2, c3 = st.columns(3)
+c1.markdown("### 1️⃣ Enter Profile\nPaste your GitHub link")
+c2.markdown("### 2️⃣ AI Analysis\nWe evaluate your activity")
+c3.markdown("### 3️⃣ Get Insights\nStrength + improvements")
+
+st.divider()
+
+st.markdown("### 📊 What We Analyze")
+
+f1, f2, f3, f4 = st.columns(4)
+f1.info("📦 Repositories")
+f2.info("⭐ Stars")
+f3.info("👥 Followers")
+f4.info("🔥 Activity")
+
+st.divider()
+
+s1, s2, s3 = st.columns(3)
+s1.error("Weak → Needs more activity")
+s2.warning("Moderate → Good but improvable")
+s3.success("Strong → Industry-ready")
+
+st.divider()
+
+sample_url = "https://github.com/torvalds"
+
+if "github_url" not in st.session_state:
+    st.session_state.github_url = ""
+
+colB, colC = st.columns([2,1])
+with colB:
+    if st.button("✨ Try Sample Profile"):
+        st.session_state.github_url = sample_url
+
+st.markdown("""
+<div style='padding:15px;border-radius:15px;t'>
+<h3>Enter your GitHub profile</h3>
+</div>
+""", unsafe_allow_html=True)
+
+github_url = st.text_input(
+    "",
+    value=st.session_state.github_url,
+    placeholder="https://github.com/your-username"
+)
+
+analyze = st.button("🚀 Analyze", use_container_width=True)
 
 def extract_username(url):
     return url.rstrip("/").split("/")[-1]
@@ -36,7 +90,6 @@ def fetch_data(username):
     repos = requests.get(f"https://api.github.com/users/{username}/repos?per_page=100", headers=headers).json()
 
     repo_count = len(repos)
-
     total_stars = sum(r.get("stargazers_count", 0) for r in repos)
     total_forks = sum(r.get("forks_count", 0) for r in repos)
 
@@ -86,30 +139,8 @@ def fetch_data(username):
     }
 
     return df, metrics, user
-def explain(shap_df, features):
 
-    texts = []
-
-    for _, r in shap_df.iterrows():
-
-        f = r["Feature"]
-        impact = r["Impact"]
-
-        user_val = features.iloc[0][f]
-        avg_val = feature_means[f]
-
-        status = "above average" if user_val > avg_val else "below average"
-
-        effect = "helps" if impact > 0 else "reduces"
-
-        texts.append(
-            f"Your **{f.replace('_',' ')} ({round(user_val,2)})** is {status} "
-            f"(avg {round(avg_val,2)}), which **{effect}** your portfolio strength."
-        )
-
-    return texts
-
-if st.button("Analyze"):
+if analyze and github_url:
 
     username = extract_username(github_url)
 
@@ -127,54 +158,32 @@ if st.button("Analyze"):
         class_id = pred[0]
         user_shap = shap_values.values[0][:, class_id]
 
-   
+    st.divider()
+
     profile_name = user_raw.get("name") or username
-    profile_url = user_raw.get("html_url", f"https://github.com/{username}")
+    profile_url = user_raw.get("html_url")
 
     st.markdown(f"## {profile_name}")
     st.markdown(f"[🔗 View GitHub Profile]({profile_url})")
 
-    st.divider()
-
     color = {"Weak":"#ff4b4b","Moderate":"#ffa500","Strong":"#00c853"}
 
-    st.markdown(
-        f"""
-        <div style="
-            padding:20px;
-            border-radius:20px;
-            background:{color[label]}15;
-            border:2px solid {color[label]};
-            mb-4;
-        ">
-            <h2 style="color:{color[label]};">Strength :{label}</h2>
-            <h4>Confidence: {confidence:.2f}%</h4>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-    st.markdown("### 📊 GitHub Activity")
+    st.markdown(f"""
+    <div style="padding:20px;border-radius:20px;background:{color[label]}15;border:2px solid {color[label]};">
+    <h2 style="color:{color[label]};">Strength: {label}</h2>
+    <h4>Confidence: {confidence:.2f}%</h4>
+    </div>
+    """, unsafe_allow_html=True)
 
     c1, c2, c3, c4 = st.columns(4)
-
     c1.metric("Public Repos", metrics["Public Repos"])
     c2.metric("Followers", metrics["Followers"])
     c3.metric("Total Stars", metrics["Total Stars"])
     c4.metric("Active Repos", metrics["Active Repos"])
 
-    st.divider()
-
-
     st.subheader("Prediction Probability")
-
-    prob_df = pd.DataFrame(
-        probs,
-        columns=le.inverse_transform([0,1,2])
-    ).T
-
+    prob_df = pd.DataFrame(probs, columns=le.inverse_transform([0,1,2])).T
     st.bar_chart(prob_df)
-
 
     shap_df = pd.DataFrame({
         "Feature": features.columns,
@@ -182,35 +191,20 @@ if st.button("Analyze"):
     }).sort_values(by="Impact", key=abs, ascending=False).head(6)
 
     st.dataframe(shap_df, use_container_width=True)
-    plt.rcParams.update({
-        "font.size": 5,          
-        "axes.titlesize": 5,
-        "axes.labelsize": 5,
-        "xtick.labelsize": 5,
-        "ytick.labelsize": 5
-    })
-    shap.plots.bar(
-    shap_values[0][:, class_id],
-    max_display=5,
-    show=False
-    )
 
-    fig = plt.gcf()                 
-    fig.set_size_inches(6, 2.5)     
-
-    plt.tight_layout()
+    shap.plots.bar(shap_values[0][:, class_id], max_display=5, show=False)
+    fig = plt.gcf()
+    fig.set_size_inches(6, 2.5)
     st.pyplot(fig)
 
     st.subheader("💡 Personalized Suggestions")
 
     for _, row in shap_df.iterrows():
-
         f = row["Feature"]
         impact = row["Impact"]
         val = features.iloc[0][f]
 
         if impact < 0:
             st.warning(f"Improve **{f.replace('_',' ')}** (current: {round(val,2)})")
-
         else:
             st.success(f"Strong **{f.replace('_',' ')}** (current: {round(val,2)})")
