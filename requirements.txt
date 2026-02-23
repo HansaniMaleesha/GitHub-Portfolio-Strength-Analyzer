@@ -1,5 +1,7 @@
-joblib
-scikit-learn
-pandas
-numpy
 streamlit
+pandas
+requests
+joblib
+shap
+matplotlib
+scikit-learn
